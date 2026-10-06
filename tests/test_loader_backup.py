@@ -11,22 +11,37 @@ from wiegand_tool.presets import w26, w34  # noqa: E402
 
 
 def test_secuencia_carga_in01():
-    # Secuencia probada en el equipo: rm -> cd&&wget (sin -O) -> verificar -> mv -> ...
+    # Secuencia probada: limpiar -> wget (sin -O) -> verificar -> borrar original
+    # -> renombrar (en staging) -> chmod -> mover (sin renombrar/reemplazar) -> ...
     url = "http://192.168.2.100:8080/dl/u.sql"
-    steps = loader.build_in01_load_sequence(url)
-    cmds = loader.commands(steps)
-    assert cmds[0] == "shell rm -f /mnt/mtdblock/u.sql"
-    assert cmds[1] == "shell cd /mnt/mtdblock && wget http://192.168.2.100:8080/dl/u.sql"
-    assert cmds[2] == "shell ls -la /mnt/mtdblock/u.sql"
-    assert cmds[3] == "shell head -c 16 /mnt/mtdblock/u.sql | od -c"
-    assert cmds[4] == "shell mv /mnt/mtdblock/u.sql /mnt/mtdblock/data/update.sql"
-    assert cmds[5] == "shell chmod 777 /mnt/mtdblock/data/update.sql"
-    assert cmds[6] == "shell ls -la /mnt/mtdblock/data/update.sql"
-    assert cmds[7] == "shell sync"
-    assert cmds[8] == "REBOOT"
-    assert "wget" in cmds[1] and "-O" not in cmds[1]  # sin -O
+    cmds = loader.commands(loader.build_in01_load_sequence(url))
+    assert cmds == [
+        "shell rm -f /mnt/mtdblock/u.sql",
+        "shell rm -f /mnt/mtdblock/update.sql",
+        "shell cd /mnt/mtdblock && wget http://192.168.2.100:8080/dl/u.sql",
+        "shell ls -la /mnt/mtdblock/u.sql",
+        "shell head -c 16 /mnt/mtdblock/u.sql | od -c",
+        "shell rm -f /mnt/mtdblock/data/update.sql",
+        "shell mv /mnt/mtdblock/u.sql /mnt/mtdblock/update.sql",
+        "shell chmod 777 /mnt/mtdblock/update.sql",
+        "shell mv /mnt/mtdblock/update.sql /mnt/mtdblock/data/update.sql",
+        "shell ls -la /mnt/mtdblock/data/update.sql",
+        "shell sync",
+        "REBOOT",
+    ]
+    # el mv final no renombra (nombres iguales) y el destino se borro antes
+    assert "-O" not in cmds[2]
     for c in cmds:
         assert len(c) <= loader.MAX_CMD_LEN, (c, len(c))
+
+
+def test_secuencia_carga_sin_renombrar_si_ya_es_update_sql():
+    # Si el archivo ya se llama update.sql, se omite el paso de renombrar.
+    url = "http://10.0.0.5:8080/dl/update.sql"
+    cmds = loader.commands(loader.build_in01_load_sequence(url, short_name="update.sql"))
+    # no debe haber un mv staging->staging (renombre a si mismo)
+    assert "shell mv /mnt/mtdblock/update.sql /mnt/mtdblock/update.sql" not in cmds
+    assert "shell mv /mnt/mtdblock/update.sql /mnt/mtdblock/data/update.sql" in cmds
 
 
 def test_db_replace_conserva_otras_filas(tmp_path):

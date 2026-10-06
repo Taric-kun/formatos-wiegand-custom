@@ -55,30 +55,46 @@ def build_in01_load_sequence(
 ) -> List[LoadStep]:
     """Secuencia probada en el IN01 para dejar ``update.sql`` y aplicarlo al boot.
 
-    Reproduce exactamente el flujo que funciono en el equipo:
-      rm -f staging  ->  cd staging && wget (SIN -O)  ->  verificar (ls, od -c)
-      ->  mv a dest  ->  chmod 777  ->  verificar (ls)  ->  sync  ->  REBOOT
+    Flujo que funciono en el equipo, con el renombre y el movimiento SEPARADOS
+    (hacer ``mv`` que renombra Y reemplaza en un solo paso no funciona):
+      rm -f descarga previa
+      cd staging && wget (SIN -O)
+      verificar (ls, head|od -c)
+      rm -f el update.sql original
+      mv el descargado -> staging/update.sql        (renombrar, en el staging)
+      chmod 777
+      mv staging/update.sql -> dest                  (mover: ya se llama igual y
+                                                       el destino esta vacio)
+      verificar (ls)  ->  sync  ->  REBOOT
 
-    Clave: ``cd`` + ``wget`` sin ``-O`` (BusyBox guarda con el nombre del URL) y
-    el ``rm -f`` previo evitan el ``File exists`` y el archivo vacio/truncado que
-    daba el ``wget -O``. La verificacion con ``od -c`` confirma que no hay BOM ni
-    truncado. ``download_url`` debe terminar en ``/<short_name>``.
+    Claves: ``cd`` + ``wget`` sin ``-O`` (BusyBox guarda con el nombre del URL);
+    el ``rm -f`` previo evita ``File exists``; se borra el update.sql anterior
+    ANTES de mover; y el ``mv`` final no renombra ni reemplaza (por eso dos mv y
+    no uno). ``download_url`` debe terminar en ``/<short_name>``.
     """
     if not download_url:
         raise LoadError("download_url vacio")
     staging = staging_dir.rstrip("/")
     tmp = f"{staging}/{short_name}"
-    return [
+    renamed = f"{staging}/update.sql"
+    steps = [
         LoadStep(f"shell rm -f {tmp}", f"Limpiar {tmp} previo"),
+        LoadStep(f"shell rm -f {renamed}", f"Limpiar {renamed} stray previo"),
         LoadStep(f"shell cd {staging} && wget {download_url}", f"Descargar a {staging} (sin -O)"),
         LoadStep(f"shell ls -la {tmp}", "Verificar que el archivo llego"),
         LoadStep(f"shell head -c 16 {tmp} | od -c", "Verificar inicio (sin BOM, no vacio)"),
-        LoadStep(f"shell mv {tmp} {dest}", f"Mover (atomico) a {dest}"),
-        LoadStep(f"shell chmod 777 {dest}", f"Permisos 777 a {dest}"),
+        LoadStep(f"shell rm -f {dest}", f"Borrar el {dest} original"),
+    ]
+    if tmp != renamed:
+        steps.append(LoadStep(f"shell mv {tmp} {renamed}", "Renombrar el descargado a update.sql"))
+    steps += [
+        LoadStep(f"shell chmod 777 {renamed}", f"Permisos 777 a {renamed}"),
+        LoadStep(f"shell mv {renamed} {dest}", f"Mover a {dest} (sin renombrar ni reemplazar)"),
         LoadStep(f"shell ls -la {dest}", "Verificar el destino"),
         LoadStep("shell sync", "Volcar buffers a disco"),
         LoadStep("REBOOT", "Reiniciar para aplicar update.sql al arrancar"),
     ]
+    return steps
 
 
 DEFAULT_DB_SHORT = "z.db"

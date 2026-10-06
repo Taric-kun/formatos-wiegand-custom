@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Formatos Wiegand — IN01</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <h1>Formatos Wiegand personalizados — IN01</h1>
+  <span class="sub" id="hdrsub"><a href="/panel">Panel ZK Commander →</a></span>
+</header>
+
+<div class="wrap">
+  <!-- EDITOR -->
+  <div class="card">
+    <h2>Editor de formato</h2>
+    <label class="lbl">Preset de partida</label>
+    <select id="preset"></select>
+    <div class="grid2">
+      <div><label class="lbl">Nombre (Format_Name)</label><input type="text" id="name" maxlength="24"></div>
+      <div><label class="lbl">SiteCode</label><input type="number" id="sitecode" value="0" min="0"></div>
+    </div>
+    <div class="grid2">
+      <div><label class="lbl">Tipo (Format_Type)</label>
+        <select id="ftype">
+          <option value="1">1 — entrada (lectura)</option>
+          <option value="3">3 — salida (Wiegand out)</option>
+          <option value="2">2 — interno (IntWiegand)</option>
+        </select>
+      </div>
+      <div><label class="lbl">Status</label>
+        <select id="status"><option value="1">1 — activo</option><option value="0">0 — inactivo</option></select>
+      </div>
+    </div>
+    <label class="lbl">Card_Format <span class="hint">(E=par, O=impar, S=site, C=card)</span></label>
+    <input type="text" id="cardfmt">
+    <div class="row">
+      <button class="btn ghost" id="btnautosplit">Auto paridades (par 1ª mitad / impar 2ª)</button>
+      <span id="cfbadge"></span>
+    </div>
+    <div id="bitsview" class="bits"></div>
+    <div id="parities"></div>
+    <div class="msg" id="editmsg"></div>
+  </div>
+
+  <!-- PREVIEW -->
+  <div class="card">
+    <h2>Previsualización</h2>
+    <label class="lbl">Máscaras calculadas</label>
+    <div class="mask" id="maskview">—</div>
+    <label class="lbl" style="margin-top:10px">Probar credencial (site / card)</label>
+    <div class="grid2">
+      <input type="number" id="smpsite" placeholder="site" min="0">
+      <input type="number" id="smpcard" placeholder="card" min="0">
+    </div>
+    <div class="mask" id="frameview" style="margin-top:6px">—</div>
+    <div class="row">
+      <button class="btn" id="btnadd">Agregar a la tabla ▾</button>
+    </div>
+  </div>
+
+  <!-- TABLA -->
+  <div class="card full">
+    <h2>Tabla a cargar</h2>
+    <div class="grid3">
+      <div><label class="lbl">Modo</label>
+        <select id="modo">
+          <option value="rewrite">Reescribir tabla (delete + insert)</option>
+          <option value="activate">Solo activar (cambiar Status del 1º)</option>
+        </select>
+      </div>
+      <div><label class="lbl">Nombre del archivo</label><input type="text" id="filename" value="u.sql"></div>
+      <div style="display:flex;align-items:flex-end"><button class="btn" id="btngen">Generar update.sql</button></div>
+    </div>
+    <div class="list" id="tablalist"></div>
+    <label class="lbl" style="margin-top:10px">update.sql generado</label>
+    <div class="cmdbox" id="sqlview">— agrega formatos y pulsa Generar —</div>
+    <div class="msg" id="genmsg"></div>
+  </div>
+
+  <!-- CARGA -->
+  <div class="card full">
+    <h2>Cargar en el reloj IN01</h2>
+    <div class="grid3">
+      <div><label class="lbl">SN destino</label><select id="sn"></select></div>
+      <div style="display:flex;align-items:flex-end;gap:8px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink)">
+          <input type="checkbox" id="dobackup" checked> Respaldar ZKDB.db primero
+        </label>
+      </div>
+      <div style="display:flex;align-items:flex-end;justify-content:flex-end">
+        <span class="devchip" id="devchip"><span class="d"></span><span id="devtxt">Sin relojes</span></span>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn ghost" id="btnloadprev">Ver comandos exactos</button>
+      <button class="btn yellow" id="btnload">Cargar en el reloj (reinicia)</button>
+      <button class="btn danger" id="btnrollback">Rollback</button>
+    </div>
+    <div class="cmdbox" id="loadview" style="display:none"></div>
+    <div class="msg" id="loadmsg"></div>
+    <div class="hint">La carga deja el <code>update.sql</code>, hace <code>chmod</code>, <code>sync</code> y
+      <code>REBOOT</code>: el reloj se reinicia y aplica el archivo al arrancar. Los comandos van
+      solo al SN elegido.</div>
+  </div>
+
+  <!-- VERIFICACION -->
+  <div class="card full">
+    <h2>Verificación post-aplicación</h2>
+    <div class="row">
+      <button class="btn ghost" id="btnvfetch">Traer copia de ZKDB.db</button>
+      <button class="btn" id="btnvcheck">Comparar formato activo</button>
+    </div>
+    <div class="cmdbox" id="vview" style="display:none"></div>
+    <div class="msg" id="vmsg"></div>
+    <div class="hint">Trae una copia de <code>ZKDB.db</code> (aparece en el panel) y compara que el
+      formato activo (<code>Status=1</code>) por tipo sea el esperado.</div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

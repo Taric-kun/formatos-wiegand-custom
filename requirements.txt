@@ -1,0 +1,2 @@
+# Nucleo: solo biblioteca estandar de Python 3.
+# La GUI y el servidor PUSH agregaran dependencias (p.ej. Flask) al definirse el stack.

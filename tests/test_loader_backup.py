@@ -24,7 +24,7 @@ def test_secuencia_carga_in01():
         "shell rm -f /mnt/mtdblock/data/update.sql",
         "shell mv /mnt/mtdblock/u.sql /mnt/mtdblock/update.sql",
         "shell chmod 777 /mnt/mtdblock/update.sql",
-        "shell mv /mnt/mtdblock/update.sql /mnt/mtdblock/data/update.sql",
+        "shell mv /mnt/mtdblock/update.sql /mnt/mtdblock/data/",
         "shell ls -la /mnt/mtdblock/data/update.sql",
         "shell sync",
         "REBOOT",
@@ -41,7 +41,7 @@ def test_secuencia_carga_sin_renombrar_si_ya_es_update_sql():
     cmds = loader.commands(loader.build_in01_load_sequence(url, short_name="update.sql"))
     # no debe haber un mv staging->staging (renombre a si mismo)
     assert "shell mv /mnt/mtdblock/update.sql /mnt/mtdblock/update.sql" not in cmds
-    assert "shell mv /mnt/mtdblock/update.sql /mnt/mtdblock/data/update.sql" in cmds
+    assert "shell mv /mnt/mtdblock/update.sql /mnt/mtdblock/data/" in cmds
 
 
 def test_db_replace_conserva_otras_filas(tmp_path):

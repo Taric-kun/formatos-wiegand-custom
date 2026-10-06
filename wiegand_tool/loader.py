@@ -87,9 +87,11 @@ def build_in01_load_sequence(
     ]
     if tmp != renamed:
         steps.append(LoadStep(f"shell mv {tmp} {renamed}", "Renombrar el descargado a update.sql"))
+    dest_dir = dest.rsplit("/", 1)[0] + "/"
     steps += [
         LoadStep(f"shell chmod 777 {renamed}", f"Permisos 777 a {renamed}"),
-        LoadStep(f"shell mv {renamed} {dest}", f"Mover a {dest} (sin renombrar ni reemplazar)"),
+        # Mover a la CARPETA (sin nombrar el destino): no renombra ni reemplaza.
+        LoadStep(f"shell mv {renamed} {dest_dir}", f"Mover a {dest_dir} (solo mover)"),
         LoadStep(f"shell ls -la {dest}", "Verificar el destino"),
         LoadStep("shell sync", "Volcar buffers a disco"),
         LoadStep("REBOOT", "Reiniciar para aplicar update.sql al arrancar"),

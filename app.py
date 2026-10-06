@@ -25,11 +25,13 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import socket
+import tempfile
 from http.server import ThreadingHTTPServer
 
 import zk_panel
-from wiegand_tool import backup, loader, sqlgen
+from wiegand_tool import backup, dbedit, loader, sqlgen
 from wiegand_tool.core import FormatError, Parity, WiegandFormat
 from wiegand_tool.presets import PRESET_STATUS, PRESETS
 
@@ -135,6 +137,12 @@ class Handler(zk_panel.Handler):
                 return self._wg_load_preview(data)
             if p == "/api/wg/load":
                 return self._wg_load(data)
+            if p == "/api/wg/build_db":
+                return self._wg_build_db(data)
+            if p == "/api/wg/load_db_preview":
+                return self._wg_load_db_preview(data)
+            if p == "/api/wg/load_db":
+                return self._wg_load_db(data)
             if p == "/api/wg/verify_fetch":
                 return self._wg_verify_fetch(data)
             if p == "/api/wg/verify_result":
@@ -211,6 +219,64 @@ class Handler(zk_panel.Handler):
         if not sn or sn == "all":
             return self._json({"error": "elige un SN especifico (no 'all')"}, 400)
         steps = self._load_steps(data)
+        ids = [zk_panel.enqueue(sn, s.cmd) for s in steps]
+        return self._json({"queued": len(ids), "sn": sn, "ids": ids})
+
+    # -- metodo reemplazo de ZKDB.db ------------------------------------- #
+    def _latest_db_capture(self):
+        with zk_panel.LOCK:
+            caps = [c for c in zk_panel.G["captures"] if c.get("type", "").startswith("SQLite")]
+        return caps[-1] if caps else None
+
+    def _wg_build_db(self, data):
+        """Edita una copia de la ZKDB.db capturada y la registra para enviar.
+
+        Requiere haber traido antes la ZKDB.db (Traer copia). Conserva todo y
+        solo modifica HID_FORMAT con los formatos indicados.
+        """
+        cap = self._latest_db_capture()
+        if not cap:
+            return self._json(
+                {"error": "primero trae la ZKDB.db del reloj (Traer copia de ZKDB.db)"}, 400
+            )
+        specs = data.get("formats", [])
+        modo = data.get("modo", "upsert")  # upsert | activate
+        name = os.path.basename(data.get("filename", "z.db")) or "z.db"
+        fmts = [format_from_spec(s) for s in specs]
+        if not fmts:
+            return self._json({"error": "no hay formatos"}, 400)
+
+        work = os.path.join(tempfile.gettempdir(), "wg_" + name)
+        shutil.copyfile(cap["path"], work)
+        summary = dbedit.apply_formats(work, fmts, modo=modo)
+        with open(work, "rb") as fh:
+            payload = fh.read()
+        info = _register_file(name, payload)
+        info["origen"] = cap["url"]
+        info["insertados"] = summary.insertados
+        info["actualizados"] = summary.actualizados
+        info["activados"] = summary.activados
+        info["filas"] = backup.read_hid_format(work)
+        return self._json(info)
+
+    def _db_steps(self):
+        url = zk_panel.url_dl()
+        if not url:
+            raise loader.LoadError("primero genera la ZKDB.db editada (Generar reemplazo)")
+        short = os.path.basename(zk_panel.G["file"]["name"]) or "z.db"
+        return loader.build_in01_db_replace_sequence(url, short_name=short)
+
+    def _wg_load_db_preview(self, data):
+        steps = self._db_steps()
+        return self._json(
+            {"steps": [{"cmd": s.cmd, "descripcion": s.descripcion} for s in steps]}
+        )
+
+    def _wg_load_db(self, data):
+        sn = (data.get("sn") or "").strip()
+        if not sn or sn == "all":
+            return self._json({"error": "elige un SN especifico (no 'all')"}, 400)
+        steps = self._db_steps()
         ids = [zk_panel.enqueue(sn, s.cmd) for s in steps]
         return self._json({"queued": len(ids), "sn": sn, "ids": ids})
 

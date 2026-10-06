@@ -28,9 +28,20 @@ Flujo en la interfaz:
 2. **Tabla**: agrega uno o varios formatos y elige *reescribir tabla* o
    *solo activar*. Pulsa **Generar** para construir el `update.sql`.
 3. **Cargar en el reloj**: elige el **SN**, deja marcado *Respaldar primero*,
-   mira los comandos exactos y pulsa **Cargar** (respalda → `wget` → `mv` →
-   `chmod` → `sync` → `REBOOT`, solo a ese SN). Botón de **Rollback**.
+   mira los comandos exactos y pulsa **Cargar**. Hay dos métodos:
+   - **update.sql** (secuencia probada en el IN01): `rm` del staging →
+     `cd && wget` (sin `-O`) → verificación (`ls`, `head | od -c`) → `mv` a
+     `data/update.sql` → `chmod` → `ls` → `sync` → `REBOOT`. Solo a ese SN.
+   - **Reemplazar ZKDB.db** (recomendado, conserva todo): trae la `ZKDB.db`
+     real, modifica en ella **solo** tu formato (agrega/activa) sin borrar el
+     resto, y reemplaza la base con `mv` + `REBOOT`. Evita el riesgo de dejar el
+     lector en blanco que tiene el `delete`+`insert` del `update.sql`.
 4. **Verificación**: trae una copia de `ZKDB.db` y compara el formato activo.
+
+> Sobre el `wget`: BusyBox guarda el archivo con el nombre del URL, así que el
+> archivo generado debe llamarse igual que el que baja (`u.sql` / `z.db`). El
+> `rm` previo evita el `File exists` y nunca se usa `wget -O` (dejaba el archivo
+> truncado/vacío y el lector quedaba en blanco).
 
 El panel crudo de ZK Commander sigue disponible en `/panel`.
 
@@ -45,9 +56,12 @@ El panel crudo de ZK Commander sigue disponible en `/panel`.
 - **Generador del `update.sql`** (`wiegand_tool/sqlgen.py`): bloques
   `[CREATE_TABLE]{ delete…; insert… }`, **UTF-8 sin BOM, LF**, comillas dobles,
   nombres de columna con guion bajo. Modos *reescribir tabla* y *solo activar*.
-- **Carga** (`wiegand_tool/loader.py`): secuencia PUSH para el IN01
-  (`wget`→`mv`→`chmod`→`sync`→`REBOOT`) con nombres cortos y control del largo
-  de cada comando (< ~90 chars) para evitar el truncado del firmware.
+- **Carga** (`wiegand_tool/loader.py`): secuencia PUSH probada para el IN01
+  (`rm`→`cd && wget`→verificación→`mv`→`chmod`→`sync`→`REBOOT`), y la variante de
+  reemplazo de `ZKDB.db`, con nombres cortos y control del largo de cada comando
+  (< ~90 chars) para evitar el truncado del firmware.
+- **Edición de la base** (`wiegand_tool/dbedit.py`): modifica `HID_FORMAT` sobre
+  una copia local de `ZKDB.db` (upsert/activar) conservando el resto.
 - **Respaldo/rollback/verificación** (`wiegand_tool/backup.py`): respalda
   `ZKDB.db`, deshace un cambio, y lee `HID_FORMAT` desde una copia descargada
   para comparar el formato activo.

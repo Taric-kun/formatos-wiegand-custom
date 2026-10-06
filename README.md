@@ -53,6 +53,10 @@ El panel crudo de ZK Commander sigue disponible en `/panel`.
 - **Presets** (`wiegand_tool/presets.py`): W26 (confirmado contra una fila real
   del equipo), W34, W37 y HID 35-bit Corporate 1000 (estos tres, editables y
   marcados *a revisar* antes de producción).
+
+> **Format_Type (comportamiento real del IN01):** `3` = entrada/lectura,
+> `1` = salida/Wiegand out, `2` = interno/IntWiegand. El firmware los interpreta
+> al revés de lo que indicaba la ingeniería inversa inicial (verificado en equipo).
 - **Generador del `update.sql`** (`wiegand_tool/sqlgen.py`): bloques
   `[CREATE_TABLE]{ delete…; insert… }`, **UTF-8 sin BOM, LF**, comillas dobles,
   nombres de columna con guion bajo. Modos *reescribir tabla* y *solo activar*.

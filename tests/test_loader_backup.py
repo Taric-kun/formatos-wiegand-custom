@@ -54,26 +54,27 @@ def test_db_replace_conserva_otras_filas(tmp_path):
             Card_Format TEXT, First_Even TEXT, Second_Even TEXT, First_Odd TEXT,
             Second_Odd TEXT, Format_Type INT, Status INT, SiteCode INT)"""
     )
+    # Tipos segun el IN01: 3=entrada, 1=salida, 2=interno.
     con.executemany(
         "INSERT INTO HID_FORMAT(Card_Bit,Format_Name,Format_Type,Status) VALUES(?,?,?,?)",
-        [(26, "Wiegand26", 1, 1), (26, "IntWiegand26", 2, 1), (26, "Wiegand26out", 3, 1)],
+        [(26, "Wiegand26", 3, 1), (26, "IntWiegand26", 2, 1), (26, "Wiegand26out", 1, 1)],
     )
     con.commit()
     con.close()
 
     from wiegand_tool import dbedit
-    nuevo = w34()  # un nuevo formato de entrada (tipo 1), activo
+    nuevo = w34()  # nuevo formato de entrada (tipo 3), activo
     summary = dbedit.apply_formats(db, [nuevo], modo="upsert")
     assert "Wiegand34" in summary.insertados
 
     filas = backup.read_hid_format(db)
     # Siguen las 3 originales + la nueva = 4; no se borro nada.
     assert len(filas) == 4
-    # El activo de tipo 1 ahora es el nuevo; los tipos 2 y 3 intactos.
-    activos_t1 = [f for f in filas if f["Format_Type"] == 1 and f["Status"] == 1]
-    assert len(activos_t1) == 1 and activos_t1[0]["Format_Name"] == "Wiegand34"
+    # El activo de entrada (tipo 3) ahora es el nuevo; salida (1) e interno (2) intactos.
+    activos_t3 = [f for f in filas if f["Format_Type"] == 3 and f["Status"] == 1]
+    assert len(activos_t3) == 1 and activos_t3[0]["Format_Name"] == "Wiegand34"
+    assert any(f["Format_Type"] == 1 and f["Status"] == 1 for f in filas)
     assert any(f["Format_Type"] == 2 and f["Status"] == 1 for f in filas)
-    assert any(f["Format_Type"] == 3 and f["Status"] == 1 for f in filas)
 
 
 def test_comando_demasiado_largo_falla():
@@ -108,7 +109,7 @@ def test_verificacion_lee_y_compara(tmp_path):
     )
     con.commit()
 
-    # Genera el bloque de reescritura con dos formatos de entrada (tipo 1).
+    # Genera el bloque de reescritura con dos formatos de entrada (tipo 3).
     f_activo = w26(site_code=0)          # Wiegand26 queda activo
     f_inactivo = w34()
     f_inactivo.status = 0
@@ -122,12 +123,13 @@ def test_verificacion_lee_y_compara(tmp_path):
 
     filas = backup.read_hid_format(db)
     assert len(filas) == 2
-    res = backup.verify_active_formats(db, {1: "Wiegand26"})
+    # En el IN01 entrada = tipo 3.
+    res = backup.verify_active_formats(db, {3: "Wiegand26"})
     assert res.ok, res.problemas
-    assert res.activos[1] == "Wiegand26"
+    assert res.activos[3] == "Wiegand26"
 
     # Si esperamos otro activo, debe reportar problema.
-    res2 = backup.verify_active_formats(db, {1: "Wiegand34"})
+    res2 = backup.verify_active_formats(db, {3: "Wiegand34"})
     assert not res2.ok
     assert res2.problemas
 

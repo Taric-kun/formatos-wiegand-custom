@@ -28,6 +28,14 @@ from typing import List, Optional
 FIELD_CHARS = set("EOSCFM0")
 DATA_CHARS = set("SCFM")  # campos que transportan datos (no paridad, no fijo)
 
+# Valores de Format_Type SEGUN EL COMPORTAMIENTO REAL DEL IN01 (verificado en
+# equipo): el firmware interpreta los valores al reves de lo que decia la
+# ingenieria inversa inicial. Entrada (lectura) = 3, Salida (Wiegand out) = 1,
+# Interno (IntWiegand) = 2.
+FMT_ENTRADA = 3   # lectura de tarjeta
+FMT_SALIDA = 1    # Wiegand out
+FMT_INTERNO = 2   # IntWiegand
+
 
 class FormatError(ValueError):
     """Error de definicion o validacion de un formato."""
@@ -62,7 +70,7 @@ class WiegandFormat:
     name: str
     card_format: str
     parities: List[Parity] = field(default_factory=list)
-    format_type: int = 1  # 1=entrada(lectura), 3=salida, 2=interno(IntWiegand)
+    format_type: int = FMT_ENTRADA  # ver constantes: 3=entrada, 1=salida, 2=interno
     status: int = 1  # 1=activo para ese format_type
     site_code: int = 0
 

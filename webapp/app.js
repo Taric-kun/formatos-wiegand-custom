@@ -189,7 +189,9 @@ async function generate() {
       formats: tabla, modo: $("modo").value, filename: $("filename").value.trim() || "u.sql"
     });
     $("sqlview").textContent = j.sql;
-    msg($("genmsg"), `Generado ${j.name} · ${j.size} bytes · MD5 ${j.md5}`, "ok");
+    const op = Object.entries(j.options || {}).map(([k, v]) => `${k}=${v}`).join(", ");
+    msg($("genmsg"), `Generado ${j.name} · ${j.size} bytes · MD5 ${j.md5}` +
+        (op ? ` · la carga fijará ${op}` : ""), "ok");
   } catch (e) { msg($("genmsg"), e.message, "err"); }
 }
 

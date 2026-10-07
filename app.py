@@ -71,13 +71,24 @@ def preset_to_spec(name: str) -> dict:
     }
 
 
-def _register_file(name: str, data: bytes) -> dict:
-    """Registra el archivo generado en el estado de zk_panel para servirlo en /dl/."""
+def _register_file(name: str, data: bytes, options: dict = None) -> dict:
+    """Registra el archivo generado en el estado de zk_panel para servirlo en /dl/.
+
+    ``options``: opciones de ZKSystem.db (largo en bits del formato activo) que
+    la carga fija con SET OPTIONS antes de reiniciar.
+    """
     md5 = hashlib.md5(data).hexdigest()
     with zk_panel.LOCK:
-        zk_panel.G["file"] = {"name": name, "data": data, "md5": md5, "size": len(data)}
+        zk_panel.G["file"] = {"name": name, "data": data, "md5": md5, "size": len(data),
+                              "options": options or {}}
     zk_panel.log(f"update.sql generado: {name} ({len(data)}b, MD5={md5})")
-    return {"name": name, "size": len(data), "md5": md5, "url": zk_panel.url_dl()}
+    return {"name": name, "size": len(data), "md5": md5, "url": zk_panel.url_dl(),
+            "options": options or {}}
+
+
+def _options_cmd():
+    f = zk_panel.G.get("file") or {}
+    return sqlgen.set_options_command(f.get("options") or {})
 
 
 # --------------------------------------------------------------------------- #
@@ -196,15 +207,19 @@ class Handler(zk_panel.Handler):
         if modo == "activate" and fmts:
             f = fmts[0]
             sql = sqlgen.build_activate_only_block(f.card_bit, f.format_type, format_name=f.name)
+            opts = sqlgen.bit_count_options([{"Format_Type": f.format_type, "Status": 1,
+                                              "Card_Bit": f.card_bit}])
         else:
             if not fmts:
                 return self._json({"error": "no hay formatos"}, 400)
-            sql = sqlgen.build_rewrite_block(fmts, keep_factory=modo != "rewrite_solo")
+            keep = modo != "rewrite_solo"
+            sql = sqlgen.build_rewrite_block(fmts, keep_factory=keep)
+            opts = sqlgen.rewrite_options(fmts, keep_factory=keep)
         normalized = sql.replace("\r\n", "\n").replace("\r", "\n")
         payload = normalized.encode("utf-8")
         if payload.startswith(b"\xef\xbb\xbf"):
             payload = payload[3:]
-        info = _register_file(name, payload)
+        info = _register_file(name, payload, opts)
         info["sql"] = sql
         return self._json(info)
 
@@ -218,7 +233,7 @@ class Handler(zk_panel.Handler):
         if data.get("backup", True):
             steps += backup.build_backup_sequence()
         steps += loader.build_in01_load_sequence(url, short_name=short)
-        return steps
+        return loader.with_options(steps, _options_cmd())
 
     def _wg_load_preview(self, data):
         steps = self._load_steps(data)
@@ -263,12 +278,13 @@ class Handler(zk_panel.Handler):
         summary = dbedit.apply_formats(work, fmts, modo=modo)
         with open(work, "rb") as fh:
             payload = fh.read()
-        info = _register_file(name, payload)
+        filas = backup.read_hid_format(work)
+        info = _register_file(name, payload, sqlgen.bit_count_options(filas))
         info["origen"] = cap["url"]
         info["insertados"] = summary.insertados
         info["actualizados"] = summary.actualizados
         info["activados"] = summary.activados
-        info["filas"] = backup.read_hid_format(work)
+        info["filas"] = filas
         return self._json(info)
 
     def _db_steps(self):
@@ -276,7 +292,8 @@ class Handler(zk_panel.Handler):
         if not url:
             raise loader.LoadError("primero genera la ZKDB.db editada (Generar reemplazo)")
         short = os.path.basename(zk_panel.G["file"]["name"]) or "z.db"
-        return loader.build_in01_db_replace_sequence(url, short_name=short)
+        return loader.with_options(
+            loader.build_in01_db_replace_sequence(url, short_name=short), _options_cmd())
 
     def _wg_load_db_preview(self, data):
         steps = self._db_steps()

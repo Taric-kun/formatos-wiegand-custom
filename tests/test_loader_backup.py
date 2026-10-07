@@ -86,6 +86,23 @@ def test_comando_demasiado_largo_falla():
         pass
 
 
+def test_carga_fija_bits_del_formato_activo():
+    # El IN01 guarda en ZKSystem.db el largo del formato activo; la carga lo fija
+    # con SET OPTIONS antes del sync/REBOOT.
+    from wiegand_tool.core import Parity, WiegandFormat
+    cf = "E" + "S" * 13 + "C" * 20 + "O"
+    data = list(range(1, 34))
+    f35 = WiegandFormat("Lector35", cf, [Parity("even", data[:16]), Parity("odd", data[16:])])
+    opts = sqlgen.rewrite_options([f35])
+    assert opts == {"ExtWGInBitsCount": 35, "WGOutBitsCount": 26}
+    cmd = sqlgen.set_options_command(opts)
+    assert cmd == "SET OPTIONS ExtWGInBitsCount=35,WGOutBitsCount=26"
+    steps = loader.with_options(
+        loader.build_in01_load_sequence("http://192.168.2.103:8080/dl/u.sql"), cmd)
+    cmds = loader.commands(steps)
+    assert cmds[-3:] == [cmd, "shell sync", "REBOOT"]
+
+
 def test_respaldo_y_rollback():
     bkp = loader.commands(backup.build_backup_sequence())
     assert bkp == ["shell cp /mnt/mtdblock/data/ZKDB.db /mnt/mtdblock/data/ZKDB.bak"]

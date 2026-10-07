@@ -149,3 +149,37 @@ def verify_update_file(path: str) -> dict:
         "has_cr": b"\r" in data,
         "ends_with_lf": data.endswith(b"\n"),
     }
+
+
+# Opciones de ZKSystem.db (OPTION_INFO) que fija el menu del IN01 al elegir un
+# formato: el largo en bits del formato activo de entrada y de salida. Si no
+# coinciden con el Card_Bit del formato activo, el formato aparece pero no lee.
+BITS_OPTION_BY_TYPE = {
+    3: "ExtWGInBitsCount",  # entrada (lector externo)
+    1: "WGOutBitsCount",    # salida Wiegand
+}
+
+
+def bit_count_options(rows: List[dict]) -> dict:
+    """{opcion: bits} segun las filas activas (Status=1) de cada Format_Type."""
+    out = {}
+    for r in rows:
+        opt = BITS_OPTION_BY_TYPE.get(r.get("Format_Type"))
+        if opt and r.get("Status") == 1:
+            out[opt] = int(r["Card_Bit"])
+    return out
+
+
+def rewrite_options(formats: Iterable[WiegandFormat], *, keep_factory: bool = True) -> dict:
+    """Opciones de bits que corresponden a la tabla que deja ``build_rewrite_block``."""
+    formats = list(formats)
+    rows = factory_rows_for(formats) if keep_factory else []
+    rows += [f.to_row() for f in formats]
+    return bit_count_options(rows)
+
+
+def set_options_command(options: dict) -> Optional[str]:
+    """Comando PUSH ``SET OPTIONS a=1,b=2`` (None si no hay nada que fijar)."""
+    if not options:
+        return None
+    return "SET OPTIONS " + ",".join(f"{k}={v}" for k, v in sorted(options.items()))

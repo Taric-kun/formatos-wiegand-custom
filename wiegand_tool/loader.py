@@ -16,7 +16,7 @@ aqui solo se arma el texto de cada comando, respetando los gotchas del firmware:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 # El IN01 aplica este archivo (relativo a /mnt/mtdblock) al arrancar.
 DEFAULT_STAGING = "/mnt/mtdblock"
@@ -129,6 +129,19 @@ def build_in01_db_replace_sequence(
         LoadStep("shell sync", "Volcar buffers a disco"),
         LoadStep("REBOOT", "Reiniciar para que el firmware tome la base nueva"),
     ]
+
+
+def with_options(steps: List[LoadStep], set_options_cmd: Optional[str]) -> List[LoadStep]:
+    """Inserta ``SET OPTIONS ...`` justo antes del ``shell sync`` final.
+
+    El IN01 guarda en ZKSystem.db el largo en bits del formato activo
+    (ExtWGInBitsCount / WGOutBitsCount); el update.sql solo toca ZKDB.db.
+    """
+    if not set_options_cmd:
+        return steps
+    step = LoadStep(set_options_cmd, "Fijar largo en bits del formato activo (ZKSystem.db)")
+    idx = next((i for i, s in enumerate(steps) if s.cmd == "shell sync"), len(steps) - 1)
+    return steps[:idx] + [step] + steps[idx:]
 
 
 def commands(steps: List[LoadStep]) -> List[str]:

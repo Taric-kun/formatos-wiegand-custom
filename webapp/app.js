@@ -243,6 +243,123 @@ async function verifyCheck() {
   } catch (e) { msg($("vmsg"), e.message, "err"); }
 }
 
+// ---------- leer tarjeta / identificar formato ----------
+// Parsea lo que se pegue en #frame. Acepta:
+//   - una línea completa "WIEGAND bits=26 hex=0x... bin=0101..."
+//   - solo bits "01011..."
+//   - solo hex "0x2004060" (requiere un largo; usamos 26 por defecto si no hay)
+function parseFrame(raw) {
+  const t = (raw || "").trim();
+  if (!t) return null;
+  const mbin = /bin=([01]+)/i.exec(t);
+  if (mbin) return { bits: mbin[1] };
+  const mbits = /bits=(\d+)/i.exec(t);
+  const mhex = /hex=0?x?([0-9a-f]+)/i.exec(t);
+  if (mhex && mbits) return { hex: mhex[1], card_bit: parseInt(mbits[1], 10) };
+  // cadena cruda de 0/1
+  if (/^[01\s_-]+$/.test(t)) return { bits: t.replace(/[\s_-]/g, "") };
+  // hex suelto
+  const h = t.toLowerCase().replace(/^0x/, "");
+  if (/^[0-9a-f]+$/.test(h)) return { hex: h, card_bit: 26 };
+  return null;
+}
+
+async function identify() {
+  const parsed = parseFrame($("frame").value);
+  if (!parsed) { msg($("identmsg"), "Pega la línea WIEGAND del Arduino, o bits/hex.", "err"); return; }
+  const target = $("target").value;
+  const body = Object.assign({}, parsed);
+  if (target !== "") body.target = +target;
+  // incluye los formatos de la tabla (por si es uno custom aún no guardado)
+  if (tabla.length) body.formats = tabla;
+  try {
+    const j = await api("/api/wg/identify", body);
+    renderIdent(j);
+    const hit = j.candidatos.find(c => c.match);
+    if (j.target != null) {
+      if (hit) msg($("identmsg"), `Coincide con "${hit.name}" para el número ${j.target}.`, "ok");
+      else msg($("identmsg"), `Ningún formato de ${j.card_bit} bits da el número ${j.target}.`, "err");
+    } else {
+      const ok = j.candidatos.find(c => c.parity_ok);
+      msg($("identmsg"), ok ? `Paridad válida con "${ok.name}".` : "Leído; revisa las paridades.", ok ? "ok" : "");
+    }
+  } catch (e) { msg($("identmsg"), e.message, "err"); }
+}
+
+function renderIdent(j) {
+  const box = $("identview"); box.innerHTML = "";
+  const head = document.createElement("div"); head.className = "hint";
+  head.innerHTML = `Trama ${j.card_bit} bits · crudo decimal ${j.raw_decimal}` +
+    (j.target != null ? ` · buscando ${j.target}` : "");
+  box.appendChild(head);
+  if (!j.candidatos.length) {
+    const d = document.createElement("div"); d.className = "hint";
+    d.textContent = "Ningún formato conocido tiene ese largo de bits.";
+    box.appendChild(d); return;
+  }
+  j.candidatos.forEach(c => {
+    const d = document.createElement("div"); d.className = "item" + (c.match ? " hit" : "");
+    const par = c.parity_ok ? '<span class="badge ok">paridad OK</span>'
+                            : '<span class="badge err">paridad ✗</span>';
+    const mk = c.match ? ' <span class="badge ok">★ coincide</span>' : "";
+    d.innerHTML = `<span class="nm">${c.name}${mk}</span>
+      <span class="meta">site ${c.site ?? "—"} · card ${c.card ?? "—"} · ${c.card_bit}b ${par}</span>`;
+    box.appendChild(d);
+  });
+}
+
+// WebSerial: lee directo del Arduino (Chrome/Edge sobre localhost o https)
+let serialPort = null, serialReader = null, serialBuf = "";
+async function toggleSerial() {
+  if (serialPort) { await closeSerial(); return; }
+  if (!("serial" in navigator)) {
+    msg($("identmsg"), "Este navegador no soporta WebSerial. Usa Chrome/Edge por localhost, o pega la línea a mano.", "err");
+    return;
+  }
+  try {
+    serialPort = await navigator.serial.requestPort();
+    await serialPort.open({ baudRate: 9600 });
+    $("serialstate").textContent = "● conectado — pasa una tarjeta";
+    $("btnserial").textContent = "Desconectar";
+    readSerialLoop();
+  } catch (e) {
+    serialPort = null;
+    msg($("identmsg"), "No se pudo abrir el puerto: " + e.message, "err");
+  }
+}
+async function readSerialLoop() {
+  const dec = new TextDecoder();
+  serialReader = serialPort.readable.getReader();
+  try {
+    while (true) {
+      const { value, done } = await serialReader.read();
+      if (done) break;
+      serialBuf += dec.decode(value);
+      let nl;
+      while ((nl = serialBuf.indexOf("\n")) >= 0) {
+        const line = serialBuf.slice(0, nl).trim();
+        serialBuf = serialBuf.slice(nl + 1);
+        if (line.startsWith("WIEGAND")) {
+          $("frame").value = line;
+          $("serialstate").textContent = "● tarjeta leída";
+          identify();
+        }
+      }
+    }
+  } catch (e) {
+    $("serialstate").textContent = "error de lectura";
+  } finally {
+    try { serialReader.releaseLock(); } catch (e) {}
+  }
+}
+async function closeSerial() {
+  try { if (serialReader) await serialReader.cancel(); } catch (e) {}
+  try { if (serialPort) await serialPort.close(); } catch (e) {}
+  serialPort = null; serialReader = null; serialBuf = "";
+  $("serialstate").textContent = "";
+  $("btnserial").textContent = "Conectar Arduino (lectura directa)";
+}
+
 // ---------- dispositivos (poll) ----------
 async function tick() {
   try {
@@ -278,6 +395,8 @@ async function init() {
   $("btnrollback").onclick = doRollback;
   $("btnvfetch").onclick = verifyFetch;
   $("btnvcheck").onclick = verifyCheck;
+  $("btnident").onclick = identify;
+  $("btnserial").onclick = toggleSerial;
   applyPreset(j.presets[0].name);
   renderTabla();
   setInterval(tick, 2000); tick();

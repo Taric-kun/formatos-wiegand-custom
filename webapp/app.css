@@ -69,6 +69,7 @@ textarea{resize:vertical;min-height:120px}
 .item .nm{font-weight:600}
 .item .meta{color:var(--muted);font-family:var(--mono);font-size:11px}
 .item .x{margin-left:auto;cursor:pointer;color:var(--err)}
+.item.hit{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok) inset}
 
 .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
 .hint b,.hint code{color:var(--ink)}

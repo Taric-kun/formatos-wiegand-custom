@@ -107,6 +107,29 @@
       solo al SN elegido.</div>
   </div>
 
+  <!-- LEER TARJETA / IDENTIFICAR FORMATO -->
+  <div class="card full">
+    <h2>Leer tarjeta e identificar formato</h2>
+    <div class="hint">
+      Conecta el lector Wiegand a un Arduino (sketch en <code>arduino/wiegand_reader</code>)
+      y pasa la tarjeta. Pega aquí la línea <code>WIEGAND …</code> del monitor serie, o
+      conéctalo directo con <b>Conectar Arduino</b> (Chrome/Edge por <code>localhost</code>).
+    </div>
+    <div class="row">
+      <button class="btn" id="btnserial">Conectar Arduino (lectura directa)</button>
+      <span id="serialstate" class="hint" style="margin:0"></span>
+    </div>
+    <label class="lbl">Trama leída (pega la línea del Arduino, o bits / hex)</label>
+    <input type="text" id="frame" placeholder="WIEGAND bits=26 hex=0x2004060 bin=10000000001000000011000000">
+    <div class="grid2">
+      <div><label class="lbl">Número impreso en la tarjeta (opcional)</label>
+        <input type="number" id="target" placeholder="ej. 45678" min="0"></div>
+      <div style="display:flex;align-items:flex-end"><button class="btn yellow" id="btnident">Identificar formato</button></div>
+    </div>
+    <div id="identview" class="list"></div>
+    <div class="msg" id="identmsg"></div>
+  </div>
+
   <!-- VERIFICACION -->
   <div class="card full">
     <h2>Verificación post-aplicación</h2>

@@ -31,7 +31,7 @@ import tempfile
 from http.server import ThreadingHTTPServer
 
 import zk_panel
-from wiegand_tool import backup, dbedit, decode, loader, sqlgen
+from wiegand_tool import backup, dbedit, detect, loader, sqlgen
 from wiegand_tool.core import FormatError, Parity, WiegandFormat
 from wiegand_tool.presets import PRESET_STATUS, PRESETS
 
@@ -143,19 +143,28 @@ class Handler(zk_panel.Handler):
                 return self._wg_load_db_preview(data)
             if p == "/api/wg/load_db":
                 return self._wg_load_db(data)
-            if p == "/api/wg/identify":
-                return self._wg_identify(data)
             if p == "/api/wg/verify_fetch":
                 return self._wg_verify_fetch(data)
             if p == "/api/wg/verify_result":
                 return self._wg_verify_result(data)
             if p == "/api/wg/rollback":
                 return self._wg_rollback(data)
+            if p == "/api/wg/detect":
+                return self._wg_detect(data)
         except (FormatError, loader.LoadError, ValueError) as exc:
             return self._json({"error": str(exc)}, 400)
         return self._json({"error": "ruta desconocida"}, 404)
 
     # -- endpoints --------------------------------------------------------- #
+    def _wg_detect(self, data):
+        """Lecturas crudas del Arduino + numero impreso -> formatos candidatos."""
+        cands = detect.detect(data.get("reads") or [])
+        if not cands:
+            return self._json(
+                {"error": "ningun tramo de bits coincide con el numero impreso; "
+                          "revisa el numero o lee otra tarjeta"}, 404)
+        return self._json({"candidatos": cands})
+
     def _wg_preview(self, data):
         """Devuelve fila, mascaras y bloque update.sql para una lista de formatos."""
         specs = data.get("formats", [])
@@ -281,55 +290,6 @@ class Handler(zk_panel.Handler):
         steps = self._db_steps()
         ids = [zk_panel.enqueue(sn, s.cmd) for s in steps]
         return self._json({"queued": len(ids), "sn": sn, "ids": ids})
-
-    # -- identificar formato desde una trama leida (Arduino) ------------- #
-    def _wg_identify(self, data):
-        """Identifica el formato de una tarjeta a partir de su trama Wiegand.
-
-        Acepta ``bits`` (string de 0/1) o ``hex`` + ``card_bit``. ``target`` es
-        el numero impreso en la tarjeta a buscar (opcional).
-        """
-        bits = (data.get("bits") or "").strip()
-        if not bits:
-            hx = (data.get("hex") or "").strip()
-            cb = data.get("card_bit")
-            if not hx or not cb:
-                return self._json({"error": "da la trama (bits) o hex + card_bit"}, 400)
-            bits = decode.bits_from_hex(hx, int(cb))
-        bits = decode.normalize_bits(bits)
-
-        target = data.get("target")
-        target = int(target) if target not in (None, "") else None
-
-        # Formatos conocidos (presets) + los que venga en la peticion.
-        formats = [PRESETS[n]() for n in PRESETS]
-        for s in data.get("formats", []) or []:
-            formats.append(format_from_spec(s))
-
-        res = decode.identify(bits, formats, target=target)
-        return self._json(
-            {
-                "bits": bits,
-                "card_bit": len(bits),
-                "raw_decimal": int(bits, 2),
-                "target": target,
-                "candidatos": [
-                    {
-                        "name": d.name,
-                        "card_bit": d.card_bit,
-                        "parity_ok": d.parity_ok,
-                        "site": d.site,
-                        "card": d.card,
-                        "raw_decimal": d.raw_decimal,
-                        "match": d.match,
-                        "match_card": d.match_card,
-                        "match_site": d.match_site,
-                        "match_raw": d.match_raw,
-                    }
-                    for d in res
-                ],
-            }
-        )
 
     def _wg_verify_fetch(self, data):
         sn = (data.get("sn") or "").strip()

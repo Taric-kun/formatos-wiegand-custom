@@ -14,6 +14,35 @@
 </header>
 
 <div class="wrap">
+  <!-- LECTOR ARDUINO -->
+  <div class="card full">
+    <h2>Lector Arduino — detectar formato de la tarjeta</h2>
+    <div class="row" style="margin-top:0">
+      <button class="btn" id="btnserial">Conectar Arduino</button>
+      <span class="devchip" id="serchip"><span class="d"></span><span id="sertxt">Desconectado</span></span>
+    </div>
+    <div class="hint" id="serhint">Pasa una tarjeta por el lector: aparece abajo con sus bits. Escribe el
+      número <b>impreso</b> en la tarjeta (solo tarjeta <code>7104</code>, o site y tarjeta
+      <code>71,7104</code>) y pulsa <b>Buscar formato</b>. Con 2–3 tarjetas distintas el resultado es
+      mucho más fiable.</div>
+    <label class="lbl">Lecturas</label>
+    <div class="list" id="readlist"></div>
+    <div class="grid3" style="margin-top:6px">
+      <input type="text" id="manbits" placeholder="agregar a mano: bits 0/1 o línea WG …">
+      <input type="text" id="manprinted" placeholder="número impreso">
+      <div><button class="btn ghost" id="btnmanadd">Agregar lectura</button></div>
+    </div>
+    <div class="row">
+      <button class="btn yellow" id="btndetect">Buscar formato</button>
+      <button class="btn ghost" id="btnreadclear">Limpiar lecturas</button>
+    </div>
+    <div class="msg" id="detmsg"></div>
+    <div id="candlist"></div>
+    <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">Monitor serie</summary>
+      <div class="cmdbox" id="serlog" style="max-height:160px;overflow:auto"></div>
+    </details>
+  </div>
+
   <!-- EDITOR -->
   <div class="card">
     <h2>Editor de formato</h2>
@@ -105,29 +134,6 @@
     <div class="hint">La carga deja el <code>update.sql</code>, hace <code>chmod</code>, <code>sync</code> y
       <code>REBOOT</code>: el reloj se reinicia y aplica el archivo al arrancar. Los comandos van
       solo al SN elegido.</div>
-  </div>
-
-  <!-- LEER TARJETA / IDENTIFICAR FORMATO -->
-  <div class="card full">
-    <h2>Leer tarjeta e identificar formato</h2>
-    <div class="hint">
-      Conecta el lector Wiegand a un Arduino (sketch en <code>arduino/wiegand_reader</code>)
-      y pasa la tarjeta. Pega aquí la línea <code>WIEGAND …</code> del monitor serie, o
-      conéctalo directo con <b>Conectar Arduino</b> (Chrome/Edge por <code>localhost</code>).
-    </div>
-    <div class="row">
-      <button class="btn" id="btnserial">Conectar Arduino (lectura directa)</button>
-      <span id="serialstate" class="hint" style="margin:0"></span>
-    </div>
-    <label class="lbl">Trama leída (pega la línea del Arduino, o bits / hex)</label>
-    <input type="text" id="frame" placeholder="WIEGAND bits=26 hex=0x2004060 bin=10000000001000000011000000">
-    <div class="grid2">
-      <div><label class="lbl">Número impreso en la tarjeta (opcional)</label>
-        <input type="number" id="target" placeholder="ej. 45678" min="0"></div>
-      <div style="display:flex;align-items:flex-end"><button class="btn yellow" id="btnident">Identificar formato</button></div>
-    </div>
-    <div id="identview" class="list"></div>
-    <div class="msg" id="identmsg"></div>
   </div>
 
   <!-- VERIFICACION -->

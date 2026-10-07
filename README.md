@@ -72,6 +72,37 @@ El panel crudo de ZK Commander sigue disponible en `/panel`.
 - **Servidor PUSH/ADMS** (`zk_panel.py`): base de ZK Commander, reutilizada como
   capa de transporte. **`app.py`** la extiende con el editor y el flujo de carga.
 
+## Detectar el formato de una tarjeta con Arduino
+
+Sirve para descubrir qué formato usa una tarjeta cuando solo se conoce el número
+**impreso** en ella.
+
+1. **Arduino** (Uno/Nano/Mega): carga `arduino/wiegand_lector/wiegand_lector.ino`
+   con el IDE de Arduino. Conexión del lector:
+
+   | Lector            | Arduino                                  |
+   |-------------------|------------------------------------------|
+   | Rojo (+V)         | fuente del lector (12 V o 5 V según modelo) |
+   | Negro (GND)       | GND de la fuente **y** GND del Arduino   |
+   | Verde (D0)        | pin 2                                    |
+   | Blanco (D1)       | pin 3                                    |
+
+   En placas de 3,3 V (ESP32) poner divisor o conversor de nivel en D0/D1.
+   El Arduino envía una línea por tarjeta a 115200: `WG <nbits> <bits> HEX=<hex>`
+   (se puede ver en el Monitor Serie del IDE; ciérralo antes de usar la app).
+2. **App**: ábrela en **Chrome o Edge en la misma PC, con `http://127.0.0.1:<puerto>/`**
+   (Web Serial no funciona entrando por la IP de red). En *Lector Arduino* pulsa
+   **Conectar Arduino** y elige el puerto COM.
+3. Pasa la tarjeta, escribe el número impreso (`7104` o `71,7104`) y pulsa
+   **Buscar formato**. Repite con 2–3 tarjetas: la paridad solo se confirma con
+   varias lecturas. **Usar en el editor** pasa el formato al editor (tipo 3,
+   entrada) para generarlo y cargarlo como siempre.
+
+La búsqueda (`wiegand_tool/detect.py`) prueba todos los tramos de bits cuyo valor
+coincide con el número (o con site + card), arma el `Card_Format` y prueba
+esquemas de paridad estándar (par/impar por mitades, solapada estilo W37,
+invertida, sobre todo). Si coincide con un preset lo indica.
+
 ## Reglas de oro (del trabajo previo sobre la flota)
 
 1. Siempre **respaldar `ZKDB.db`** antes de tocar nada y **verificar** después.
@@ -84,4 +115,6 @@ El panel crudo de ZK Commander sigue disponible en `/panel`.
 
 ```bash
 python3 tests/test_core.py
+python3 tests/test_loader_backup.py
+python3 tests/test_detect.py
 ```

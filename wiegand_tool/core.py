@@ -112,21 +112,48 @@ class WiegandFormat:
                 "HID_FORMAT solo admite hasta 2 paridades pares y 2 impares"
             )
 
-        parity_positions = set(even_positions) | set(odd_positions)
         for p in self.parities:
+            own = self.own_position(p)
             for idx in p.covers:
                 if idx < 0 or idx >= len(cf):
                     raise FormatError(
                         f"la paridad {p.kind} cubre el indice {idx} fuera de rango "
                         f"(0..{len(cf) - 1})"
                     )
-                if idx in parity_positions:
+                # Puede cubrir OTRO bit de paridad (p.ej. HID Corporate 1000),
+                # pero nunca el suyo propio.
+                if idx == own:
                     raise FormatError(
-                        f"la paridad {p.kind} no puede cubrir el bit de paridad "
+                        f"la paridad {p.kind} no puede cubrir su propio bit "
                         f"en el indice {idx}"
                     )
             if not p.covers:
                 raise FormatError(f"la paridad {p.kind} no cubre ningun bit")
+        self._parity_order()  # detecta paridades que se cubren entre si
+
+    def own_position(self, parity: Parity) -> int:
+        """Indice en Card_Format del propio bit de ``parity`` (n-esimo E u O)."""
+        target = "E" if parity.kind == "even" else "O"
+        same_kind = [p for p in self.parities if p.kind == parity.kind]
+        order = next(i for i, p in enumerate(same_kind) if p is parity)
+        return [i for i, c in enumerate(self.card_format) if c == target][order]
+
+    def _parity_order(self) -> List[Parity]:
+        """Orden de calculo: primero las paridades que no dependen de otras."""
+        pending = list(self.parities)
+        done_pos: set = set()
+        all_pos = {self.own_position(p) for p in self.parities}
+        order: List[Parity] = []
+        while pending:
+            ready = [p for p in pending
+                     if not ((set(p.covers) & all_pos) - done_pos)]
+            if not ready:
+                raise FormatError("hay paridades que se cubren mutuamente")
+            for p in ready:
+                order.append(p)
+                done_pos.add(self.own_position(p))
+                pending.remove(p)
+        return order
 
     # ------------------------------------------------------------------ #
     # Generacion de mascaras
@@ -206,21 +233,13 @@ class WiegandFormat:
             for pos, b in zip(positions, vbits):
                 bits[pos] = b
 
-        # Calcula las paridades.
-        for p in self.parities:
+        # Calcula las paridades (las que cubren otro bit de paridad, al final).
+        for p in self._parity_order():
             ones = sum(1 for idx in p.covers if bits[idx] == "1")
             if p.kind == "even":
                 pbit = "1" if ones % 2 else "0"
             else:  # odd
                 pbit = "0" if ones % 2 else "1"
-            target = "E" if p.kind == "even" else "O"
-            # asigna al bit de paridad que corresponde (1a par/impar vs 2a)
-            self._assign_parity_bit(bits, cf, p, target, pbit)
+            bits[self.own_position(p)] = pbit
 
         return "".join(bits)
-
-    def _assign_parity_bit(self, bits, cf, parity, target, value) -> None:
-        same_kind = [p for p in self.parities if p.kind == parity.kind]
-        order = same_kind.index(parity)
-        positions = [i for i, c in enumerate(cf) if c == target]
-        bits[positions[order]] = value

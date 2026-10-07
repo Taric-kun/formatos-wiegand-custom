@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from wiegand_tool import detect  # noqa: E402
-from wiegand_tool.presets import w26, w34, w37  # noqa: E402
+from wiegand_tool.presets import hid35_corp1000, w26, w34, w37  # noqa: E402
 
 
 def test_linea_del_arduino():
@@ -43,6 +43,14 @@ def test_w34_y_w37():
     assert detect.detect(b34)[0]["preset"] == "W34"
     b37 = [{"bits": w37().encode(site=1234, card=300000), "printed": "1234 300000"}]
     assert detect.detect(b37)[0]["preset"] == "W37"
+
+
+def test_hid_corporate_1000_35_bits():
+    f = hid35_corp1000()
+    reads = [{"bits": f.encode(site=s, card=c), "printed": str(c)}
+             for s, c in ((1234, 567890), (1234, 1001), (77, 400000))]
+    best = detect.detect(reads)[0]
+    assert best["preset"] == "HID35_Corp1000" and best["todas_ok"], best
 
 
 def test_formato_no_estandar():

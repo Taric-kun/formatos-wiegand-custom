@@ -36,13 +36,14 @@ function reconcileParities() {
   const nO = parityPositions(cf, "odd").length;
   const evens = cur.parities.filter(p => p.kind === "even");
   const odds = cur.parities.filter(p => p.kind === "odd");
+  // Una paridad puede cubrir OTRO bit de paridad (HID Corporate 1000), nunca el suyo.
   const fix = (arr, kind, n) => {
     const res = [];
+    const own = parityPositions(cf, kind);
     for (let i = 0; i < n; i++) {
       const prev = arr[i] || { kind, covers: [] };
-      const pPositions = new Set([...parityPositions(cf, "even"), ...parityPositions(cf, "odd")]);
       prev.kind = kind;
-      prev.covers = (prev.covers || []).filter(ix => ix >= 0 && ix < cf.length && !pPositions.has(ix));
+      prev.covers = (prev.covers || []).filter(ix => ix >= 0 && ix < cf.length && ix !== own[i]);
       res.push(prev);
     }
     return res;
@@ -79,7 +80,6 @@ function renderParities() {
   cur.parities.forEach((p) => {
     const order = counts[p.kind]++;
     const own = ownPosition(p, order);
-    const pPositions = new Set([...parityPositions(cf, "even"), ...parityPositions(cf, "odd")]);
     const wrap = document.createElement("div"); wrap.className = "parityrow";
     const label = p.kind === "even" ? "Paridad PAR" : "Paridad IMPAR";
     const slot = p.kind === "even" ? (order === 0 ? "First_Even" : "Second_Even")
@@ -89,7 +89,7 @@ function renderParities() {
     for (let i = 0; i < cf.length; i++) {
       const b = document.createElement("div");
       const covered = p.covers.includes(i);
-      const disabled = pPositions.has(i);
+      const disabled = i === own;
       b.className = "bit " + charClass(cf[i]) + (covered ? " cov" : "");
       b.style.opacity = disabled ? ".35" : "1";
       b.innerHTML = `<span class="ix">${i}</span><span>${cf[i]}</span>`;

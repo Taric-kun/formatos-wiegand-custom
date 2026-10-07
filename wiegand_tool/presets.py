@@ -63,23 +63,23 @@ def w37(site_code: int = 0, name: str = "Wiegand37") -> WiegandFormat:
 
 
 def hid35_corp1000(site_code: int = 0, name: str = "HIDCorp35") -> WiegandFormat:
-    """HID 35-bit Corporate 1000 (H10320 / C1000-35).
+    """HID 35-bit Corporate 1000 (C1000-35), segun la especificacion de HID.
 
-    Layout: 1 par (leading) + 12 company + 20 card + 2 trailing (par, impar).
-    OJO: el esquema de paridad real de Corporate 1000 usa patrones intercalados
-    y debe confirmarse contra un lector antes de usar en produccion. Aqui se
-    deja el layout y una paridad par/impar basica como punto de partida.
+    Layout (0-based): bit 0 impar, bit 1 par, 2..13 company (12 bits),
+    14..33 numero de tarjeta (20 bits), bit 34 impar.
+      - par  (bit 1):  bits 2,3,5,6,8,9,...,32,33 (2 de cada 3)
+      - impar (bit 34): bits 1,2,4,5,7,8,...,31,32 (incluye el bit 1 de paridad)
+      - impar (bit 0):  todos los demas (1..34, incluye los otros dos de paridad)
+    El numero que lee el reloj es el de 20 bits (el impreso en la tarjeta).
     """
-    cf = "E" + "S" * 12 + "C" * 20 + "E" + "O"
-    data_idx = [i for i, c in enumerate(cf) if c in "SC"]
-    half = len(data_idx) // 2
+    cf = "OE" + "S" * 12 + "C" * 20 + "O"
     return WiegandFormat(
         name=name,
         card_format=cf,
         parities=[
-            Parity("even", data_idx[:half]),
-            Parity("even", data_idx[half:]),
-            Parity("odd", data_idx),
+            Parity("odd", list(range(1, 35))),                            # bit 0
+            Parity("even", [i for i in range(2, 34) if (i - 1) % 3 != 0]),  # bit 1
+            Parity("odd", [i for i in range(1, 33) if i % 3 != 0]),         # bit 34
         ],
         site_code=site_code,
     )

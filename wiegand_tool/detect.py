@@ -305,6 +305,20 @@ def detect(reads: List[Dict]) -> List[Dict]:
                     continue
                 cands.append(_score(fmt, esquema, preset, nota, parsed))
 
+    # Los presets del mismo largo se prueban siempre tal cual: algunos (HID
+    # Corporate 1000) tienen paridades que la busqueda generica no arma.
+    for key_name, factory in PRESETS.items():
+        fmt = factory()
+        if fmt.card_bit != n:
+            continue
+        key = (fmt.card_format, tuple((p.kind, tuple(p.covers)) for p in fmt.parities))
+        if key in seen:
+            continue
+        seen.add(key)
+        cand = _score(fmt, f"preset {key_name}", key_name, "preset", parsed)
+        if any(r["coincide"] for r in cand.lecturas):
+            cands.append(cand)
+
     if not cands:
         return []
     # Si algun candidato explica TODAS las lecturas, se descartan los que no.

@@ -58,7 +58,7 @@ El panel crudo de ZK Commander sigue disponible en `/panel`.
 > `1` = salida/Wiegand out, `2` = interno/IntWiegand. El firmware los interpreta
 > al revés de lo que indicaba la ingeniería inversa inicial (verificado en equipo).
 - **Generador del `update.sql`** (`wiegand_tool/sqlgen.py`): bloques
-  `[CREATE_TABLE]{ delete…; insert… }`, **UTF-8 sin BOM, LF**, comillas dobles,
+  `[INSERT]{ DELETE…; UPDATE sqlite_sequence…; INSERT… }` (copiado de la herramienta que funciona en el IN01), **UTF-8 sin BOM, LF**, comillas simples,
   nombres de columna con guion bajo. Modos *reescribir tabla* y *solo activar*.
 - **Carga** (`wiegand_tool/loader.py`): secuencia PUSH probada para el IN01
   (`rm`→`cd && wget`→verificación→`mv`→`chmod`→`sync`→`REBOOT`), y la variante de

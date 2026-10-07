@@ -148,7 +148,7 @@ def test_verificacion_lee_y_compara(tmp_path):
     f_inactivo.status = 0
     block = sqlgen.build_rewrite_block([f_activo, f_inactivo], keep_factory=False)
 
-    # Traduce el bloque [CREATE_TABLE]{...} a SQL plano y lo ejecuta (simula el boot).
+    # Traduce el bloque [INSERT]{...} a SQL plano y lo ejecuta (simula el boot).
     inner = block.split("{", 1)[1].rsplit("}", 1)[0]
     con.executescript(inner)
     con.commit()

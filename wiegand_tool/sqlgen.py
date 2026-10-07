@@ -1,18 +1,26 @@
 """Generador del archivo de actualizacion para el reloj.
 
-Produce el formato de bloques que aplica el firmware al arrancar:
+Reproduce EXACTAMENTE el ``update.sql`` que carga la herramienta que funciona
+en el IN01 (capturado con Wireshark: viaja dentro de ``mtdblock.tgz`` como
+``data/update.sql``)::
 
-    [CREATE_TABLE]
+    [INSERT]
     {
-    delete from HID_FORMAT where ID>0;
-    insert into HID_FORMAT(...) VALUES(...);
-    ...
+    <TAB>DELETE from HID_FORMAT where ID>0;
+    <TAB>UPDATE sqlite_sequence SET seq='0' WHERE name='HID_FORMAT';
+    <TAB>INSERT INTO HID_FORMAT (Card_Bit, Format_Name, Card_Format,First_Even, First_Odd, Format_Type, Status) VALUES (26,'Wiegand26',...,3,1);
     }
 
-Reglas de oro respetadas al escribir el archivo:
+Claves frente a la version anterior (que el reloj mostraba pero no leia):
+  - Bloque ``[INSERT]`` (no ``[CREATE_TABLE]``), lineas con tabulador.
+  - Se reinicia ``sqlite_sequence``: los ID vuelven a empezar en 1.
+  - Solo las columnas que usa la herramienta; ``Second_*`` y ``SiteCode`` se
+    agregan unicamente si el formato las necesita (si no, quedan NULL).
+  - Comillas SIMPLES para el texto.
+
+Reglas de oro al escribir el archivo:
   - UTF-8 SIN BOM (un BOM rompe la primera sentencia: ``delete: not found``).
-  - Terminadores de linea LF (``\n``), nunca CRLF.
-  - Comillas DOBLES para los valores de texto.
+  - Terminadores de linea LF, nunca CRLF.
   - Nombres de columna CON guion bajo (Card_Bit, First_Even, ...).
 """
 
@@ -23,38 +31,34 @@ from typing import Iterable, List, Optional
 from .core import WiegandFormat
 from .factory import FACTORY_ROWS
 
-# Columnas que escribimos en cada INSERT, en orden.
-_COLUMNS = [
-    "Card_Bit",
-    "Format_Name",
-    "Card_Format",
-    "First_Even",
-    "Second_Even",
-    "First_Odd",
-    "Second_Odd",
-    "Format_Type",
-    "Status",
-    "SiteCode",
-]
-
-
 def _sql_value(v) -> str:
     if v is None:
         return "NULL"
     if isinstance(v, int):
         return str(v)
-    # texto: comillas dobles; escapamos comillas dobles internas duplicandolas.
-    return '"' + str(v).replace('"', '""') + '"'
+    # texto: comillas simples (como la herramienta original), escapadas duplicandolas.
+    return "'" + str(v).replace("'", "''") + "'"
 
 
 def _insert_statement(fmt: WiegandFormat) -> str:
     return _insert_row(fmt.to_row())
 
 
+# Columnas que siempre lleva el INSERT (mismo orden y espaciado que el original).
+_BASE_COLUMNS = ["Card_Bit", "Format_Name", "Card_Format", "First_Even", "First_Odd",
+                 "Format_Type", "Status"]
+_OPTIONAL_COLUMNS = ["Second_Even", "Second_Odd", "SiteCode"]
+
+
 def _insert_row(row: dict) -> str:
-    cols = ", ".join(_COLUMNS)
-    vals = ", ".join(_sql_value(row[c]) for c in _COLUMNS)
-    return f"insert into HID_FORMAT({cols}) VALUES({vals});"
+    cols = list(_BASE_COLUMNS)
+    cols += [c for c in _OPTIONAL_COLUMNS if row.get(c) is not None]
+    names = "Card_Bit, Format_Name, Card_Format,First_Even, First_Odd, Format_Type, Status"
+    extra = cols[len(_BASE_COLUMNS):]
+    if extra:
+        names += ", " + ", ".join(extra)
+    vals = ",".join(_sql_value(row[c]) for c in cols)
+    return f"\tINSERT INTO HID_FORMAT ({names}) VALUES ({vals});"
 
 
 def factory_rows_for(formats: List[WiegandFormat]) -> List[dict]:
@@ -90,7 +94,12 @@ def build_rewrite_block(formats: Iterable[WiegandFormat], *, keep_factory: bool 
     formats = list(formats)
     for f in formats:
         f.validate()
-    lines: List[str] = ["[CREATE_TABLE]", "{", "delete from HID_FORMAT where ID>0;"]
+    lines: List[str] = [
+        "[INSERT]",
+        "{",
+        "\tDELETE from HID_FORMAT where ID>0;",
+        "\tUPDATE sqlite_sequence SET seq='0' WHERE name='HID_FORMAT';",
+    ]
     if keep_factory:
         lines.extend(_insert_row(r) for r in factory_rows_for(formats))
     lines.extend(_insert_statement(f) for f in formats)

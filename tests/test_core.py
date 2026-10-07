@@ -52,11 +52,26 @@ def test_validacion_numero_de_paridades():
         pass
 
 
+def test_mismo_formato_que_la_herramienta_que_funciona():
+    # tests/data/update_herramienta_ok.sql: el update.sql que carga la herramienta
+    # que SI funciona en el IN01 (sacado de una captura de Wireshark).
+    ref_path = os.path.join(os.path.dirname(__file__), "data", "update_herramienta_ok.sql")
+    with open(ref_path, "rb") as fh:
+        ref = fh.read().decode("utf-8").splitlines()
+    from wiegand_tool.factory import FACTORY_ROWS
+    ours = sqlgen.build_rewrite_block([]).splitlines()
+    assert ours[:4] == ref[:4]  # [INSERT] { DELETE ... UPDATE sqlite_sequence ...
+    assert ours[-1] == ref[-1] == "}"
+    # Wiegand26 tipo 1 de fabrica: misma linea, byte a byte.
+    assert sqlgen._insert_row(FACTORY_ROWS[4]) in ref
+
+
 def test_archivo_update_sin_bom_y_lf(tmp_path):
     block = sqlgen.build_rewrite_block([w26(site_code=0)])
-    assert block.startswith("[CREATE_TABLE]")
-    assert "delete from HID_FORMAT where ID>0;" in block
-    assert '"Wiegand26"' in block  # comillas dobles
+    assert block.startswith("[INSERT]\n{\n")
+    assert "\tDELETE from HID_FORMAT where ID>0;" in block
+    assert "\tUPDATE sqlite_sequence SET seq='0' WHERE name='HID_FORMAT';" in block
+    assert "'Wiegand26'" in block  # comillas simples
     p = tmp_path / "update_wiegand_new.sql"
     sqlgen.write_update_file(str(p), "﻿" + block.replace("\n", "\r\n"))
     info = sqlgen.verify_update_file(str(p))

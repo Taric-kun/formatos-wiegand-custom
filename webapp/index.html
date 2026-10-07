@@ -14,6 +14,35 @@
 </header>
 
 <div class="wrap">
+  <!-- LECTOR ARDUINO -->
+  <div class="card full">
+    <h2>Lector Arduino — detectar formato de la tarjeta</h2>
+    <div class="row" style="margin-top:0">
+      <button class="btn" id="btnserial">Conectar Arduino</button>
+      <span class="devchip" id="serchip"><span class="d"></span><span id="sertxt">Desconectado</span></span>
+    </div>
+    <div class="hint" id="serhint">Pasa una tarjeta por el lector: aparece abajo con sus bits. Escribe el
+      número <b>impreso</b> en la tarjeta (solo tarjeta <code>7104</code>, o site y tarjeta
+      <code>71,7104</code>) y pulsa <b>Buscar formato</b>. Con 2–3 tarjetas distintas el resultado es
+      mucho más fiable.</div>
+    <label class="lbl">Lecturas</label>
+    <div class="list" id="readlist"></div>
+    <div class="grid3" style="margin-top:6px">
+      <input type="text" id="manbits" placeholder="agregar a mano: bits 0/1 o línea WG …">
+      <input type="text" id="manprinted" placeholder="número impreso">
+      <div><button class="btn ghost" id="btnmanadd">Agregar lectura</button></div>
+    </div>
+    <div class="row">
+      <button class="btn yellow" id="btndetect">Buscar formato</button>
+      <button class="btn ghost" id="btnreadclear">Limpiar lecturas</button>
+    </div>
+    <div class="msg" id="detmsg"></div>
+    <div id="candlist"></div>
+    <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">Monitor serie</summary>
+      <div class="cmdbox" id="serlog" style="max-height:160px;overflow:auto"></div>
+    </details>
+  </div>
+
   <!-- EDITOR -->
   <div class="card">
     <h2>Editor de formato</h2>

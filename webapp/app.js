@@ -14,7 +14,7 @@ const msg = (el, text, kind) => {
 };
 
 // Estado del editor
-let cur = { name: "", card_format: "", parities: [], format_type: 1, status: 1, site_code: 0 };
+let cur = { name: "", card_format: "", parities: [], format_type: 3, status: 1, site_code: 0 };
 let tabla = [];          // lista de specs a cargar
 let presets = {};        // name -> spec
 
@@ -243,6 +243,126 @@ async function verifyCheck() {
   } catch (e) { msg($("vmsg"), e.message, "err"); }
 }
 
+// ---------- lector Arduino (Web Serial) + detección de formato ----------
+let reads = [];          // [{bits, printed}]
+let serialPort = null;
+const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function serLog(line) {
+  const box = $("serlog");
+  box.textContent = (box.textContent + line + "\n").split("\n").slice(-200).join("\n");
+  box.scrollTop = box.scrollHeight;
+}
+function setSerial(on, text) {
+  $("serchip").classList.toggle("on", on);
+  $("sertxt").textContent = text;
+  $("btnserial").textContent = on ? "Desconectar" : "Conectar Arduino";
+}
+function onSerialLine(line) {
+  if (!line) return;
+  serLog(line);
+  const m = /^WG\s+(\d+)\s+([01]+)/.exec(line);
+  if (!m) return;
+  reads.push({ bits: m[2], printed: "" });
+  renderReads();
+  const inputs = document.querySelectorAll("#readlist input");
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+async function serialToggle() {
+  if (serialPort) {
+    try { await serialPort.close(); } catch (e) {}
+    serialPort = null; setSerial(false, "Desconectado"); return;
+  }
+  if (!("serial" in navigator)) {
+    msg($("detmsg"), "Este navegador no permite Web Serial. Abre la app en Chrome o Edge desde " +
+        `http://127.0.0.1:${location.port || 80}/ en esta misma PC (no por la IP de red).`, "err");
+    return;
+  }
+  try {
+    serialPort = await navigator.serial.requestPort();
+    await serialPort.open({ baudRate: 115200 });
+  } catch (e) { serialPort = null; msg($("detmsg"), "No se pudo abrir el puerto: " + e.message, "err"); return; }
+  setSerial(true, "Conectado · esperando tarjeta");
+  msg($("detmsg"), "", "");
+  const port = serialPort;
+  const dec = new TextDecoderStream();
+  port.readable.pipeTo(dec.writable).catch(() => {});
+  const rd = dec.readable.getReader();
+  let buf = "";
+  try {
+    for (;;) {
+      const { value, done } = await rd.read();
+      if (done) break;
+      buf += value;
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) { onSerialLine(buf.slice(0, i).trim()); buf = buf.slice(i + 1); }
+    }
+  } catch (e) { serLog("# puerto cerrado: " + e.message); }
+  if (serialPort === port) { serialPort = null; setSerial(false, "Desconectado"); }
+}
+
+function renderReads() {
+  const box = $("readlist"); box.innerHTML = "";
+  if (!reads.length) { box.innerHTML = '<div class="hint">Sin lecturas aún.</div>'; return; }
+  reads.forEach((r, i) => {
+    const d = document.createElement("div"); d.className = "item read";
+    d.innerHTML = `<span class="nm">${r.bits.length} bits</span>
+      <span class="bitsraw">${r.bits}</span>
+      <input type="text" placeholder="número impreso" value="${esc(r.printed)}">
+      <span class="x" title="quitar">✕</span>`;
+    d.querySelector("input").oninput = (ev) => { r.printed = ev.target.value; };
+    d.querySelector("input").onkeydown = (ev) => { if (ev.key === "Enter") detectFormat(); };
+    d.querySelector(".x").onclick = () => { reads.splice(i, 1); renderReads(); };
+    box.appendChild(d);
+  });
+}
+function manualAdd() {
+  let b = $("manbits").value.trim();
+  const m = /^WG\s+\d+\s+([01]+)/.exec(b);
+  if (m) b = m[1];
+  b = b.replace(/\s+/g, "");
+  if (!/^[01]{4,}$/.test(b)) { msg($("detmsg"), "Los bits deben ser solo 0 y 1 (mínimo 4).", "err"); return; }
+  reads.push({ bits: b, printed: $("manprinted").value.trim() });
+  $("manbits").value = ""; $("manprinted").value = "";
+  msg($("detmsg"), "", ""); renderReads();
+}
+
+function colorCf(cf) {
+  return cf.split("").map(c => `<span class="${"EOSC".includes(c) ? c : (c === "F" ? "F" : "z")}">${c}</span>`).join("");
+}
+async function detectFormat() {
+  const withNum = reads.filter(r => r.printed.trim());
+  if (!withNum.length) { msg($("detmsg"), "Escribe el número impreso de al menos una lectura.", "err"); return; }
+  try {
+    const j = await api("/api/wg/detect", { reads: withNum });
+    msg($("detmsg"), `${j.candidatos.length} candidato(s) con ${withNum.length} lectura(s). El primero es el más probable.`, "ok");
+    const box = $("candlist"); box.innerHTML = "";
+    j.candidatos.forEach((c, k) => {
+      const d = document.createElement("div"); d.className = "cand" + (k === 0 && c.todas_ok ? " best" : "");
+      const lect = c.lecturas.map(l =>
+        `${l.coincide ? "✓" : "✗"} impreso <b>${esc(l.impreso)}</b> → site ${l.site ?? "—"} · card ${l.card ?? "—"} · paridad ${l.paridad_ok ? "OK" : "FALLA"}`).join("<br>");
+      d.innerHTML = `<div class="hd"><b>${esc(c.name)}</b>
+          <span class="badge ${c.todas_ok ? "ok" : "warn"}">${c.todas_ok ? "cuadra con todas" : "parcial"}</span>
+          <span class="badge">${c.card_format.length} bits · ${esc(c.esquema)}</span>
+          <span class="badge">puntaje ${c.score}</span>
+          <button class="btn ghost" style="margin-left:auto">Usar en el editor</button></div>
+        <div class="cf">${colorCf(c.card_format)}</div>
+        <div class="det">${lect}${c.notas.length ? "<br>⚠ " + c.notas.map(esc).join("<br>⚠ ") : ""}</div>`;
+      d.querySelector("button").onclick = () => useCandidate(c);
+      box.appendChild(d);
+    });
+  } catch (e) { $("candlist").innerHTML = ""; msg($("detmsg"), e.message, "err"); }
+}
+function useCandidate(c) {
+  cur = { name: c.name, card_format: c.card_format, parities: JSON.parse(JSON.stringify(c.parities)),
+          format_type: c.format_type, status: c.status, site_code: c.site_code };
+  $("name").value = cur.name; $("sitecode").value = cur.site_code;
+  $("ftype").value = cur.format_type; $("status").value = cur.status;
+  $("cardfmt").value = cur.card_format;
+  renderBits(); renderParities(); previewMasks();
+  $("name").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 // ---------- dispositivos (poll) ----------
 async function tick() {
   try {
@@ -278,6 +398,11 @@ async function init() {
   $("btnrollback").onclick = doRollback;
   $("btnvfetch").onclick = verifyFetch;
   $("btnvcheck").onclick = verifyCheck;
+  $("btnserial").onclick = serialToggle;
+  $("btnmanadd").onclick = manualAdd;
+  $("btndetect").onclick = detectFormat;
+  $("btnreadclear").onclick = () => { reads = []; renderReads(); $("candlist").innerHTML = ""; msg($("detmsg"), "", ""); };
+  renderReads();
   applyPreset(j.presets[0].name);
   renderTabla();
   setInterval(tick, 2000); tick();

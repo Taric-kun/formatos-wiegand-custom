@@ -81,4 +81,14 @@ textarea{resize:vertical;min-height:120px}
 .devchip .d{width:8px;height:8px;border-radius:50%;background:var(--muted)}
 .devchip.on .d{background:var(--ok);box-shadow:0 0 7px var(--ok)}
 
+.read{flex-wrap:wrap}
+.read .bitsraw{font:11px var(--mono);color:#7ec8e3;word-break:break-all;flex:1 1 260px}
+.read input{width:150px;flex:0 0 150px}
+.cand{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:9px 11px;margin-top:8px}
+.cand.best{border-color:var(--ok)}
+.cand .hd{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cand .cf{font:12px var(--mono);word-break:break-all;margin-top:5px}
+.cand .cf .E{color:#38d39f}.cand .cf .O{color:#ff9f43}.cand .cf .S{color:var(--blue)}.cand .cf .C{color:var(--yellow)}
+.cand .cf .F,.cand .cf .z{color:var(--muted)}
+.cand .det{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6}
 @media(max-width:800px){.wrap{grid-template-columns:1fr}.full{grid-column:1}}

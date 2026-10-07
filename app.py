@@ -31,7 +31,7 @@ import tempfile
 from http.server import ThreadingHTTPServer
 
 import zk_panel
-from wiegand_tool import backup, dbedit, loader, sqlgen
+from wiegand_tool import backup, dbedit, detect, loader, sqlgen
 from wiegand_tool.core import FormatError, Parity, WiegandFormat
 from wiegand_tool.presets import PRESET_STATUS, PRESETS
 
@@ -149,11 +149,22 @@ class Handler(zk_panel.Handler):
                 return self._wg_verify_result(data)
             if p == "/api/wg/rollback":
                 return self._wg_rollback(data)
+            if p == "/api/wg/detect":
+                return self._wg_detect(data)
         except (FormatError, loader.LoadError, ValueError) as exc:
             return self._json({"error": str(exc)}, 400)
         return self._json({"error": "ruta desconocida"}, 404)
 
     # -- endpoints --------------------------------------------------------- #
+    def _wg_detect(self, data):
+        """Lecturas crudas del Arduino + numero impreso -> formatos candidatos."""
+        cands = detect.detect(data.get("reads") or [])
+        if not cands:
+            return self._json(
+                {"error": "ningun tramo de bits coincide con el numero impreso; "
+                          "revisa el numero o lee otra tarjeta"}, 404)
+        return self._json({"candidatos": cands})
+
     def _wg_preview(self, data):
         """Devuelve fila, mascaras y bloque update.sql para una lista de formatos."""
         specs = data.get("formats", [])

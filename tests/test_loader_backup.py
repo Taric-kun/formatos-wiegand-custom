@@ -97,6 +97,39 @@ def test_respaldo_y_rollback():
         assert len(c) <= loader.MAX_CMD_LEN
 
 
+def test_reescritura_conserva_filas_de_fabrica(tmp_path):
+    # El update.sql reinserta las 22 filas de fabrica + la nuestra, con un unico
+    # activo por tipo; tipos 1 y 2 quedan como venian de fabrica.
+    from wiegand_tool.core import Parity, WiegandFormat
+    from wiegand_tool.factory import FACTORY_ROWS
+
+    db = str(tmp_path / "ZKDB.db")
+    con = sqlite3.connect(db)
+    con.execute(
+        """CREATE TABLE HID_FORMAT(
+            ID INTEGER PRIMARY KEY AUTOINCREMENT, Card_Bit INTEGER NOT NULL, Format_Name TEXT,
+            Card_Format TEXT, First_Even TEXT, Second_Even TEXT, First_Odd TEXT,
+            Second_Odd TEXT, Format_Type INT, Status INT, SiteCode INTEGER)"""
+    )
+    cf = "E" + "S" * 13 + "C" * 20 + "O"
+    data = list(range(1, 34))
+    nuevo = WiegandFormat("Lector35", cf, [Parity("even", data[:16]), Parity("odd", data[16:])])
+    block = sqlgen.build_rewrite_block([nuevo])
+    con.executescript(block.split("{", 1)[1].rsplit("}", 1)[0])
+    con.commit()
+    filas = backup.read_hid_format(db)
+    con.close()
+
+    assert len(filas) == len(FACTORY_ROWS) + 1
+    activos = {}
+    for f in filas:
+        if f["Status"] == 1:
+            activos.setdefault(f["Format_Type"], []).append(f["Format_Name"])
+    assert activos == {2: ["IntWiegand26"], 1: ["Wiegand26"], 3: ["Lector35"]}
+    nuestra = [f for f in filas if f["Format_Name"] == "Lector35"][0]
+    assert nuestra["SiteCode"] is None  # como las de fabrica, no 0
+
+
 def test_verificacion_lee_y_compara(tmp_path):
     # Arma una ZKDB.db de prueba con HID_FORMAT y aplica el update.sql generado.
     db = str(tmp_path / "ZKDB.db")
@@ -113,7 +146,7 @@ def test_verificacion_lee_y_compara(tmp_path):
     f_activo = w26(site_code=0)          # Wiegand26 queda activo
     f_inactivo = w34()
     f_inactivo.status = 0
-    block = sqlgen.build_rewrite_block([f_activo, f_inactivo])
+    block = sqlgen.build_rewrite_block([f_activo, f_inactivo], keep_factory=False)
 
     # Traduce el bloque [CREATE_TABLE]{...} a SQL plano y lo ejecuta (simula el boot).
     inner = block.split("{", 1)[1].rsplit("}", 1)[0]

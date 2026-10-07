@@ -168,7 +168,7 @@ class Handler(zk_panel.Handler):
     def _wg_preview(self, data):
         """Devuelve fila, mascaras y bloque update.sql para una lista de formatos."""
         specs = data.get("formats", [])
-        modo = data.get("modo", "rewrite")  # rewrite | activate
+        modo = data.get("modo", "rewrite")  # rewrite | rewrite_solo | activate
         fmts = [format_from_spec(s) for s in specs]
         out = {"rows": [f.to_row() for f in fmts]}
         if modo == "activate" and fmts:
@@ -177,7 +177,8 @@ class Handler(zk_panel.Handler):
                 f.card_bit, f.format_type, format_name=f.name
             )
         else:
-            out["sql"] = sqlgen.build_rewrite_block(fmts) if fmts else ""
+            out["sql"] = (sqlgen.build_rewrite_block(fmts, keep_factory=modo != "rewrite_solo")
+                          if fmts else "")
         # vista previa opcional de la trama para un site/card de ejemplo
         if data.get("sample") and fmts:
             s = data["sample"]
@@ -198,7 +199,7 @@ class Handler(zk_panel.Handler):
         else:
             if not fmts:
                 return self._json({"error": "no hay formatos"}, 400)
-            sql = sqlgen.build_rewrite_block(fmts)
+            sql = sqlgen.build_rewrite_block(fmts, keep_factory=modo != "rewrite_solo")
         normalized = sql.replace("\r\n", "\n").replace("\r", "\n")
         payload = normalized.encode("utf-8")
         if payload.startswith(b"\xef\xbb\xbf"):

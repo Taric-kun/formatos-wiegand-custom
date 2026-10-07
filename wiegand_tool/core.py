@@ -174,7 +174,8 @@ class WiegandFormat:
             "Second_Odd": m["Second_Odd"],
             "Format_Type": self.format_type,
             "Status": self.status,
-            "SiteCode": self.site_code,
+            # Las filas de fabrica llevan SiteCode NULL; 0 no es lo mismo.
+            "SiteCode": self.site_code or None,
         }
 
     # ------------------------------------------------------------------ #

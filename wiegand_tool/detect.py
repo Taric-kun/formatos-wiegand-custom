@@ -353,6 +353,12 @@ def _score(fmt, esquema, preset, nota, parsed) -> Candidate:
         notas.append("hay bits fijos '0' sin asignar")
     if cf.count("C") in COMMON_CARD_WIDTHS:
         score += 1
+    if esquema == "par y impar sobre todo":
+        # Par e impar sobre los mismos bits obliga a que ambos bits difieran:
+        # con 1-2 lecturas cuadra por azar y no es un formato real conocido.
+        score -= 6
+        notas.append("esquema poco comun (par e impar sobre los mismos bits): "
+                     "confirmar con varias tarjetas")
     if not fmt.parities:
         notas.append("sin paridad: el IN01 aceptara cualquier trama de este largo")
     elif not all(r["paridad_ok"] for r in lecturas):
